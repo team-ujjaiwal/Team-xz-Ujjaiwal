@@ -10,7 +10,7 @@ import json
 import CSLikeProfile_pb2 as like_pb2
 import CSLikeProfile_count_pb2 as like_count_pb2
 import uid_generator_pb2
-import GameInfo_pb2  # GameInfo protobuf file import
+import GameInfo_pb2  # नई GameInfo protobuf file import करें
 from google.protobuf.message import DecodeError
 
 app = Flask(__name__)
@@ -18,24 +18,18 @@ app = Flask(__name__)
 # Initialize API keys set
 api_keys = set()
 
-# GameInfo से release version automatically लें
+# GameInfo से release version लें
 def get_release_version():
     try:
-        # GameInfo message create करें और उससे release_version लें
         game_info = GameInfo_pb2.GameInfo()
-        # अगर GameInfo में release_version set है तो उसे use करें
-        if game_info.release_version:
-            return game_info.release_version
-        else:
-            # Default fallback value
-            return ""
+        # आप यहाँ version set कर सकते हैं या file से read कर सकते हैं
+        # अगर आपके पास version store करने का कोई तरीका है
+        return ""  # Default value, आप इसे modify कर सकते हैं
     except Exception as e:
-        app.logger.error(f"Error getting release version from GameInfo: {e}")
+        app.logger.error(f"Error getting release version: {e}")
         return ""  # Fallback value
 
-# Application startup पर automatically version set करें
 RELEASE_VERSION = get_release_version()
-app.logger.info(f"Loaded release version from GameInfo: {RELEASE_VERSION}")
 
 def load_tokens(server_name):
     try:
@@ -87,7 +81,7 @@ async def send_request(encrypted_uid, token, url):
             'Expect': "100-continue",
             'X-Unity-Version': "2018.4.11f1",
             'X-GA': "v1 1",
-            'ReleaseVersion': RELEASE_VERSION  # GameInfo से automatically लिया गया version
+            'ReleaseVersion': RELEASE_VERSION  # GameInfo से लिया गया version use करें
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(url, data=edata, headers=headers) as response:
@@ -159,7 +153,7 @@ def make_request(encrypt, server_name, token):
             'Expect': "100-continue",
             'X-Unity-Version': "2018.4.11f1",
             'X-GA': "v1 1",
-            'ReleaseVersion': RELEASE_VERSION  # GameInfo से automatically लिया गया version
+            'ReleaseVersion': RELEASE_VERSION  # GameInfo से लिया गया version use करें
         }
         response = requests.post(url, data=edata, headers=headers, verify=False)
         hex_data = response.content.hex()
@@ -212,6 +206,19 @@ def del_all_keys():
 @app.route('/all_keys', methods=['GET'])
 def all_keys():
     return jsonify({'keys': list(api_keys)}), 200
+
+@app.route('/set_version', methods=['GET'])
+def set_version():
+    global RELEASE_VERSION
+    new_version = request.args.get('version')
+    if not new_version:
+        return jsonify({'error': 'Missing version parameter'}), 400
+    RELEASE_VERSION = new_version
+    return jsonify({'message': f'Version updated to {new_version}'}), 200
+
+@app.route('/get_version', methods=['GET'])
+def get_version():
+    return jsonify({'version': RELEASE_VERSION}), 200
 
 # API key verification
 def verify_key(key):
@@ -293,5 +300,4 @@ def handle_requests():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    app.logger.info(f"Starting application with release version: {RELEASE_VERSION}")
     app.run(debug=True, use_reloader=False)
