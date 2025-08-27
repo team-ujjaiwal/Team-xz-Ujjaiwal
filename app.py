@@ -10,12 +10,26 @@ import json
 import CSLikeProfile_pb2 as like_pb2
 import CSLikeProfile_count_pb2 as like_count_pb2
 import uid_generator_pb2
+import GameInfo_pb2  # नई GameInfo protobuf file import करें
 from google.protobuf.message import DecodeError
 
 app = Flask(__name__)
 
 # Initialize API keys set
 api_keys = set()
+
+# GameInfo से release version लें
+def get_release_version():
+    try:
+        game_info = GameInfo_pb2.GameInfo()
+        # आप यहाँ version set कर सकते हैं या file से read कर सकते हैं
+        # अगर आपके पास version store करने का कोई तरीका है
+        return "OB50"  # Default value, आप इसे modify कर सकते हैं
+    except Exception as e:
+        app.logger.error(f"Error getting release version: {e}")
+        return "OB50"  # Fallback value
+
+RELEASE_VERSION = get_release_version()
 
 def load_tokens(server_name):
     try:
@@ -67,7 +81,7 @@ async def send_request(encrypted_uid, token, url):
             'Expect': "100-continue",
             'X-Unity-Version': "2018.4.11f1",
             'X-GA': "v1 1",
-            'ReleaseVersion': "OB50"
+            'ReleaseVersion': RELEASE_VERSION  # GameInfo से लिया गया version use करें
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(url, data=edata, headers=headers) as response:
@@ -107,7 +121,7 @@ async def send_multiple_requests(uid, server_name, url):
 def create_protobuf(uid):
     try:
         message = uid_generator_pb2.uid_generator()
-        message.ujjaiwal_ = int(uid)  # Changed from saturn_ to ujjaiwal_
+        message.ujjaiwal_ = int(uid)
         message.garena = 1
         return message.SerializeToString()
     except Exception as e:
@@ -139,7 +153,7 @@ def make_request(encrypt, server_name, token):
             'Expect': "100-continue",
             'X-Unity-Version': "2018.4.11f1",
             'X-GA': "v1 1",
-            'ReleaseVersion': "OB50"
+            'ReleaseVersion': RELEASE_VERSION  # GameInfo से लिया गया version use करें
         }
         response = requests.post(url, data=edata, headers=headers, verify=False)
         hex_data = response.content.hex()
@@ -170,7 +184,7 @@ def make_key():
     key = request.args.get('key')
     if not key:
         return jsonify({'error': 'Missing key parameter'}), 400
-    api_keys.add(key)  # إضافة المفتاح للمجموعة
+    api_keys.add(key)
     return jsonify({'message': 'Key added successfully', 'key': key}), 200
 
 @app.route('/del_key', methods=['GET'])
@@ -193,7 +207,20 @@ def del_all_keys():
 def all_keys():
     return jsonify({'keys': list(api_keys)}), 200
 
-# التحقق من صحة المفتاح
+@app.route('/set_version', methods=['GET'])
+def set_version():
+    global RELEASE_VERSION
+    new_version = request.args.get('version')
+    if not new_version:
+        return jsonify({'error': 'Missing version parameter'}), 400
+    RELEASE_VERSION = new_version
+    return jsonify({'message': f'Version updated to {new_version}'}), 200
+
+@app.route('/get_version', methods=['GET'])
+def get_version():
+    return jsonify({'version': RELEASE_VERSION}), 200
+
+# API key verification
 def verify_key(key):
     return key in api_keys
 
@@ -262,7 +289,8 @@ def handle_requests():
                 "LikesafterCommand": after_like,
                 "PlayerNickname": player_name,
                 "UID": player_uid,
-                "status": status
+                "status": status,
+                "release_version": RELEASE_VERSION  # Response में version भी include करें
             }
             return result
 
